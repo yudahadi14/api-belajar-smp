@@ -1,0 +1,11 @@
+node_modules
+public/doctors
+public/identitas
+public/jantung
+public/uploads
+public/ube
+public/skl_request
+log
+models/auto
+docs
+.env
