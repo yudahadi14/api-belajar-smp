@@ -70,3 +70,15 @@ exports.signAuthIgdJwt = (data) => {
     expiresIn: process.env.JWT_AUTH_TIME,
   });
 };
+
+exports.signRefreshStudyJwt = (data) => {
+  return jwt.sign(data, process.env.JWT_REFRESH_TOKEN_KEY_IGD, {
+    expiresIn: process.env.JWT_REFRESH_TIME_IGD,
+  });
+};
+
+exports.signAuthStudyJwt = (data) => {
+  return jwt.sign(data, process.env.JWT_AUTH_TOKEN_KEY, {
+    expiresIn: process.env.JWT_AUTH_TIME,
+  });
+};
