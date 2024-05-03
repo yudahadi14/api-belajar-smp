@@ -4,6 +4,7 @@ const md5 = require("md5");
 const {
     signRefreshStudyJwt,
     signAuthStudyJwt,
+    regenerateToken
   } = require("../../helpers/utility/jwt");
 
 exports.getTokenMobile = (req, res) => {
@@ -106,26 +107,48 @@ exports.getTokenMobile = (req, res) => {
       }
     }
   
-    return models.user_mobile_child
+    return models.user_mobile_log
       .findOne({
         where: {
-          peg_id: verified.peg_id,
-          user_mobile_token: refresh_token,
+          fk_user_id: verified.id_user,
+          user_token: refresh_token,
         },
       })
       .then((granted) => {
         if (!granted) {
           throw new Error("Not Authenticated");
         }
-        return success(
-          req,
-          res,
-          signAuthJwt({
-            peg_id: verified.peg_id,
-            peg_nama: verified.peg_nama,
-          }),
-          "Token diberikan."
-        );
+
+        return models.user_mobile
+          .findOne({
+            where: {
+              user_id: verified.id_user
+            },
+          })
+          .then((granted2) => {
+
+            if (!granted2) {
+              throw new Error("Not Authenticated");
+            }
+
+            return success(
+              req,
+              res,
+              signAuthStudyJwt({
+                id_user: granted2.user_id,
+                user_notlp: granted2.user_notlp,
+                user_nama: granted2.user_nama,
+                user_pin: granted2.user_pin
+              }),
+              "Token diberikan."
+            );
+
+          })
+          .catch((err) => {
+            return error(req, res, {}, "Not Authenticated", 401, err);
+          });
+
+        
       })
       .catch((err) => {
         return error(req, res, {}, "Not Authenticated", 401, err);
@@ -133,9 +156,9 @@ exports.getTokenMobile = (req, res) => {
   };
 
   exports.daftarUser  = (req, res) => { 
-    let { firebasetoken, notelp, nama, pin } = req.body;
+    let { firebasetoken, notelp, nama, pin, usertoken } = req.body;
 
-    console.log(notelp);
+    console.log(notelp+firebasetoken+usertoken);
 
 
     return models.user_mobile
@@ -163,22 +186,19 @@ exports.getTokenMobile = (req, res) => {
                 id_user: userid,
                 user_notlp: notelp,
                 user_nama: nama,
-                user_pin: pin,
-                firebasetoken: firebasetoken
+                user_pin: pin
               });
 
               let refreshToken = signRefreshStudyJwt({
                 id_user: userid,
                 user_notlp: notelp,
                 user_nama: nama,
-                user_pin: pin,
-                firebasetoken: firebasetoken
+                user_pin: pin
               });
 
               return models.user_mobile_log.create({
                 fk_user_id: userid,
                 firebasetoken: firebasetoken,
-                user_pin: pin,
                 user_token: refreshToken
               }).then((data) => {
     
@@ -222,40 +242,136 @@ exports.getTokenMobile = (req, res) => {
           });
 
         }else{
-              let userid = granted[0].user_id;
-              let authToken = signAuthJwt({
-                id_user: userid,
-                user_notlp: notelp,
-                user_nama: nama,
-                user_pin: pin,
-                firebasetoken: firebasetoken
-              });
 
-              let refreshToken = signRefreshJwt({
-                id_user: userid,
-                user_notlp: notelp,
-                user_nama: nama,
-                user_pin: pin,
-                firebasetoken: firebasetoken
-              });
+          return models.user_mobile
+          .findOne({
+            where: {
+              user_notlp: notelp,
+              user_pin: pin
+            },
+          })
+          .then((granted2) => {
 
-              return success(
-                req,
-                res,
+              if(!granted2)
+              {
+
+                return error(req, res, {}, "PIN Kamu Salah, Cek Lagi Ya", 401, '');
+
+              }else{
+
+                console.log(granted);
+                let userid = granted.dataValues.user_id;
+                let p_username = granted.dataValues.user_nama;
+                let authToken = signAuthStudyJwt({
+                  id_user: userid,
+                  user_notlp: notelp,
+                  user_nama: p_username,
+                  user_pin: pin
+                });
+                let refreshtoken = '';
+
+                if(usertoken == '' || !usertoken || usertoken == 'undefined')
                 {
-                  authToken: authToken,
-                  refreshToken: refreshToken,
-                  data_user: {
+
+                  refreshtoken = signRefreshStudyJwt({
                     id_user: userid,
                     user_notlp: notelp,
-                    user_nama: nama,
-                    user_pin: pin,
-                    firebasetoken: firebasetoken
+                    user_nama: p_username,
+                    user_pin: pin
+                  });
+
+                }else{
+                  refreshtoken = usertoken;
+                }
+
+                // let refreshToken = signRefreshStudyJwt({
+                //   id_user: userid,
+                //   user_notlp: notelp,
+                //   user_nama: nama,
+                //   user_pin: pin
+                // });
+
+                console.log('usermobile log'+userid+refreshtoken);
+
+                return models.user_mobile_log
+                .findOne({
+                  where: {
+                    fk_user_id: userid,
+                    user_token: refreshtoken.toString(),
+                    firebasetoken: firebasetoken || null
                   },
-                },
-                "User termuat",
-                200
-              );
+                })
+                .then((logs) => {
+
+                  if(!logs)
+                  {
+
+                    return models.user_mobile_log.create({
+                      fk_user_id: userid,
+                      user_token: refreshtoken
+                    }).then((datalogs) => {
+          
+                      return success(
+                        req,
+                        res,
+                        {
+                          authToken: authToken,
+                          refreshToken: refreshtoken,
+                          data_user: {
+                            id_user: userid,
+                            user_notlp: notelp,
+                            user_nama: p_username,
+                            user_pin: pin,
+                            firebasetoken: firebasetoken
+                          },
+                        },
+                        "User termuat",
+                        200
+                      );
+
+
+                    })
+                    .catch((err) => {
+                      return error(req, res, {}, "Not Authenticated", 401, err);
+                    });
+          
+
+                  }else{
+
+                    return success(
+                        req,
+                        res,
+                        {
+                          authToken: authToken,
+                          refreshToken: refreshtoken,
+                          data_user: {
+                            id_user: userid,
+                            user_notlp: notelp,
+                            user_nama: p_username,
+                            user_pin: pin,
+                            firebasetoken: firebasetoken
+                          },
+                        },
+                        "User termuat",
+                        200
+                      );
+
+                  }
+
+                })
+                .catch((err) => {
+                  return error(req, res, {}, "Not Authenticated", 401, err);
+                });
+
+              }
+
+          })
+          .catch((err) => {
+            return error(req, res, {}, "Not Authenticated", 401, err);
+          });
+
+
+              
         }
         
       })
@@ -266,3 +382,36 @@ exports.getTokenMobile = (req, res) => {
 
 
   }
+
+  exports.cekUser  = (req, res) => { 
+    let { notelp } = req.body;
+
+    console.log(notelp);
+
+
+    return models.user_mobile
+      .findOne({
+        where: {
+          user_notlp: notelp,
+        },
+      })
+      .then((granted) => {
+
+        return success(
+          req,
+          res,
+          granted,
+          "User termuat",
+          200
+        );
+
+      })
+      .catch((err) => {
+        return error(req, res, {}, "Not Authenticated", 401, err);
+      });
+
+
+
+  }
+
+      

@@ -5,7 +5,9 @@ public/jantung
 public/uploads
 public/ube
 public/skl_request
+public/Pembelajaran
 log
 models/auto
 docs
 .env
+package-lock.json
